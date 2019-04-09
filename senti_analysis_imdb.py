@@ -35,7 +35,7 @@ print(LABEL.vocab.freqs) #ラベルごとの件数
 print(TEXT.vocab.itos[:10]) #単語10個
 
 #バッチ単位にする
-train_iter, val_dataset, test_dataset = data.BucketIterator.splits((train_dataset, val_dataset, test_dataset), batch_size=32, sort_key=lambda x: len(x.text), repeat=False, shuffle=True)
+train_iter, val_iter, test_iter = data.BucketIterator.splits((train_dataset, val_dataset, test_dataset), batch_size=32, sort_key=lambda x: len(x.text), repeat=False, shuffle=True)
 
 vocab_size = len(TEXT.vocab) #単語数
 print(vocab_size) #単語数のサイズ
@@ -73,6 +73,7 @@ class LstmClassifier(nn.Module):
     self.fc = nn.Linear(hidden_size, output_size)
 
   def forward(self, x):
+    x = self.embed(x)
     #初期隠れ状態とセル状態を設定
     h0 = torch.zeros(1, self.batch_size, self.hidden_size).to(device)
     c0 = torch.zeros(1, self.batch_size, self.hidden_size).to(device)
@@ -90,6 +91,100 @@ criterion = nn.CrossEntropyLoss()
 optim = optim.Adam(filter(lambda p: p.requires_grad, net.parameters()))
 
 
+#学習
+num_epochs = 2
 
+train_loss_list = []
+train_acc_list = []
+val_loss_list = []
+val_acc_list = []
+
+for epoch in range(num_epochs):
+  #エポックごとに初期化
+  train_loss = 0
+  train_acc = 0
+  val_loss = 0
+  val_acc = 0
+
+  #train
+  net.train()
+  for i, batch in enumerate(train_iter):
+    text = batch.text[0]
+    text = text.to(device)
+    if (text.size()[0] is not 32):
+      continue
+
+    labels = batch.label
+    labels = labels.to(device)
+    optim.zero_grad()
+    outputs = net(text)
+    loss = criterion(outputs, labels)
+    train_loss += loss.item()
+    train_acc += (outputs.max(1)[1] == labels).sum().item()
+    loss.backward()
+    optim.step()
+
+  net.eval()
+  with torch.no_grad():
+    total = 0
+    test_acc = 0
+    for batch in test_iter:
+      text = batch.text[0]
+      text = text.to(device)
+      if (text.size()[0] is not 32):
+        continue
+
+      abels = batch.label
+      labels = labels.to(device)
+
+      outputs = net(text)
+      loss = criterion(outputs, labels)
+      val_loss += loss.item()
+      val_acc += (outputs.max(1)[1] == labels).sum().item()
+
+  avg_val_loss = val_loss / len(val_iter.dataset)
+  avg_val_acc = val_acc / len(val_iter.dataset)
+
+  print ('Epoch [{}/{}], Loss: {loss:.4f}, val_loss: {val_loss:.4f}, val_acc: {val_acc:.4f}' 
+                 .format(epoch+1, num_epochs, i+1, loss=avg_train_loss, val_loss=avg_val_loss, val_acc=avg_val_acc))
+  train_loss_list.append(avg_train_loss)
+  train_acc_list.append(avg_train_acc)
+  val_loss_list.append(avg_val_loss)
+  val_acc_list.append(avg_val_acc)
+
+plt.plot(range(num_epochs), train_loss_list, color='blue', linestyle='-', label='train_loss')
+plt.plot(range(num_epochs), val_loss_list, color='green', linestyle='--', label='val_loss')
+plt.legend()
+plt.xlabel('epoch')
+plt.ylabel('loss')
+plt.title('Training and validation loss')
+plt.grid()
+
+plt.figure()
+plt.plot(range(num_epochs), train_acc_list, color='blue', linestyle='-', label='train_acc')
+plt.plot(range(num_epochs), val_acc_list, color='green', linestyle='--', label='val_acc')
+plt.legend()
+plt.xlabel('epoch')
+plt.ylabel('acc')
+plt.title('Training and validation accuracy')
+plt.grid()
+plt.show()
+
+net.eval()
+with torch.no_grad():
+  total = 0
+  test_acc = 0
+  for batch in test_iter:
+    text = batch.text[0]
+    text = text.to(device)
+    if (text.size()[0] is not 32):
+      continue
+    labels = batch.label
+    labels = labels.to(device)
+
+    outputs = net(text)
+    test_acc += (outputs.max(1)[1] == labels).sum().item()
+    total += labels.size(0)
+  print('精度: {} %'.format(100 * test_acc / total))
 
 
