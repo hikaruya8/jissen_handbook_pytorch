@@ -92,7 +92,7 @@ optim = optim.Adam(filter(lambda p: p.requires_grad, net.parameters()))
 
 
 #学習
-num_epochs = 2
+num_epochs = 10
 
 train_loss_list = []
 train_acc_list = []
@@ -123,6 +123,8 @@ for epoch in range(num_epochs):
     train_acc += (outputs.max(1)[1] == labels).sum().item()
     loss.backward()
     optim.step()
+  avg_train_loss = train_loss / len(train_iter.dataset)
+  avg_train_acc = train_acc / len(train_iter.dataset)
 
   net.eval()
   with torch.no_grad():
